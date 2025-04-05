@@ -94,8 +94,4 @@ def main():
 
 
 # Main
-<<<<<<< HEAD
-=======
-lol=IPCalc()
-lol.ipDecToBin(ip='192.168.1.1')
->>>>>>> 1d76b2a (Implement ipDecToBin method in IPCalc class for converting decimal IP addresses to binary format)
+main()
