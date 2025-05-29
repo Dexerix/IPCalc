@@ -48,12 +48,12 @@ class IPCalc:
             str: The IP address in binary format
         """
         ip_parts = ip.split('.')
-        ip_bin = ''
         bin_parts = []
         for i in range(4):
-            part = decimal_to_bin(int(ip_parts[i-1]))
+            # Correction : utiliser ip_parts[i] et ajouter un padding à 8 bits
+            part = decimal_to_bin(int(ip_parts[i])).zfill(8)
             bin_parts.append(part)
-        ip_bin = '.'.join(bin_parts)   
+        ip_bin = '.'.join(bin_parts)
         return ip_bin
 
     def subnet_mask_calc(self, cidr: int) -> str:
