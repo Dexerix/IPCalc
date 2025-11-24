@@ -173,6 +173,156 @@ class IPCalc:
         
         return '.'.join(network_decimal), '.'.join(broadcast_decimal)
 
+    def get_ip_class(self, ip: str) -> tuple:
+        """Determines the IP address class and its standard subnet mask.
+        
+        Parameters:
+            ip (str): IP address in decimal format (e.g. "192.168.1.0")
+            
+        Returns:
+            tuple: A tuple containing (class_name, default_cidr, default_mask)
+        """
+        first_octet = int(ip.split('.')[0])
+        
+        if 0 <= first_octet <= 127:
+            return ('A', 8, '255.0.0.0')
+        elif 128 <= first_octet <= 191:
+            return ('B', 16, '255.255.0.0')
+        elif 192 <= first_octet <= 223:
+            return ('C', 24, '255.255.255.0')
+        elif 224 <= first_octet <= 239:
+            return ('D', None, None)  # Multicast
+        else:
+            return ('E', None, None)  # Reserved
+
+    def calculate_all_subnets(self, ip: str, subnet_mask: str) -> dict:
+        """Calculates complete subnet information including all subnets created by the mask.
+        
+        Parameters:
+            ip (str): IP address in decimal format (e.g. "192.168.1.0")
+            subnet_mask (str): Subnet mask in decimal format (e.g. "255.255.255.0")
+            
+        Returns:
+            dict: Dictionary containing:
+                - 'ip_class': The IP address class (A, B, C, D, or E)
+                - 'default_mask': The default mask for this IP class
+                - 'subnet_mask': The provided subnet mask
+                - 'cidr': CIDR notation of the subnet mask
+                - 'network_address': Network address for the given IP
+                - 'broadcast_address': Broadcast address for the given IP
+                - 'first_usable': First usable IP address
+                - 'last_usable': Last usable IP address
+                - 'total_hosts': Total number of usable hosts per subnet
+                - 'subnets_count': Number of subnets created from the default class
+                - 'subnet_info': List of all subnet ranges
+        """
+        # Get IP class information
+        ip_class, default_cidr, default_mask = self.get_ip_class(ip)
+        
+        # Calculate CIDR from subnet mask
+        mask_binary = ''.join(self.ip_dec_to_bin(subnet_mask).split('.'))
+        cidr = mask_binary.count('1')
+        
+        # Calculate network and broadcast for the given IP
+        network_address, broadcast_address = self.broadcast_calc(ip, subnet_mask)
+        first_usable, last_usable = self.subnet_calc(ip, subnet_mask)
+        
+        # Calculate total hosts per subnet
+        total_hosts = (2 ** (32 - cidr)) - 2 if cidr < 31 else 0
+        
+        # Calculate number of subnets created from default class
+        subnets_count = 0
+        if default_cidr is not None and cidr > default_cidr:
+            subnets_count = 2 ** (cidr - default_cidr)
+        
+        # Calculate all subnet ranges if subnetting occurred
+        subnet_list = []
+        if subnets_count > 0 and default_mask is not None:
+            # Get the network address of the entire class network
+            class_network, _ = self.broadcast_calc(ip, default_mask)
+            
+            # Calculate subnet size
+            subnet_size = 2 ** (32 - cidr)
+            
+            # Convert class network to integer for easier calculation
+            octets = [int(o) for o in class_network.split('.')]
+            base_ip = (octets[0] << 24) + (octets[1] << 16) + (octets[2] << 8) + octets[3]
+            
+            # Generate all subnets
+            for i in range(min(subnets_count, 100)):  # Limit to 100 subnets for display
+                subnet_base = base_ip + (i * subnet_size)
+                
+                # Convert back to dotted decimal
+                subnet_ip = f"{(subnet_base >> 24) & 0xFF}.{(subnet_base >> 16) & 0xFF}.{(subnet_base >> 8) & 0xFF}.{subnet_base & 0xFF}"
+                
+                # Calculate subnet details
+                net_addr, bcast_addr = self.broadcast_calc(subnet_ip, subnet_mask)
+                first_ip, last_ip = self.subnet_calc(subnet_ip, subnet_mask)
+                
+                subnet_list.append({
+                    'subnet_number': i + 1,
+                    'network_address': net_addr,
+                    'first_usable': first_ip,
+                    'last_usable': last_ip,
+                    'broadcast_address': bcast_addr
+                })
+        
+        return {
+            'ip_class': ip_class,
+            'default_mask': default_mask,
+            'subnet_mask': subnet_mask,
+            'cidr': cidr,
+            'network_address': network_address,
+            'broadcast_address': broadcast_address,
+            'first_usable': first_usable,
+            'last_usable': last_usable,
+            'total_hosts': total_hosts,
+            'subnets_count': subnets_count if subnets_count > 0 else 1,
+            'subnet_info': subnet_list if subnet_list else [{
+                'subnet_number': 1,
+                'network_address': network_address,
+                'first_usable': first_usable,
+                'last_usable': last_usable,
+                'broadcast_address': broadcast_address
+            }]
+        }
+
+    def subnet_info_calc(self, ip: str, cidr: int) -> dict:
+        """Calculates complete subnet information from IP address and CIDR.
+        
+        Parameters:
+            ip (str): IP address in decimal format (e.g. "192.168.1.0")
+            cidr (int): CIDR notation number (0-32)
+            
+        Returns:
+            dict: Dictionary containing:
+                - 'subnet_mask': Subnet mask in decimal format
+                - 'network_address': Network address
+                - 'broadcast_address': Broadcast address
+                - 'first_usable': First usable IP address
+                - 'last_usable': Last usable IP address
+                - 'total_hosts': Total number of usable hosts
+        """
+        # Calculate subnet mask from CIDR
+        subnet_mask = self.subnet_mask_calc(cidr)
+        
+        # Calculate network and broadcast addresses
+        network_address, broadcast_address = self.broadcast_calc(ip, subnet_mask)
+        
+        # Calculate usable IP range
+        first_usable, last_usable = self.subnet_calc(ip, subnet_mask)
+        
+        # Calculate total number of usable hosts (2^(32-cidr) - 2)
+        total_hosts = (2 ** (32 - cidr)) - 2 if cidr < 31 else 0
+        
+        return {
+            'subnet_mask': subnet_mask,
+            'network_address': network_address,
+            'broadcast_address': broadcast_address,
+            'first_usable': first_usable,
+            'last_usable': last_usable,
+            'total_hosts': total_hosts
+        }
 
 def main():
     """Main function that provides a CLI interface for the IP calculator"""
@@ -186,15 +336,16 @@ def main():
         menu+= "2. Calculate Network Range\n"
         menu+= "3. Calculate Network and Broadcast Addresses\n"
         menu+= "4. Convert IP to Binary\n"
+        menu+= "5. Calculate Complete Subnet Information\n"
+        menu+= "6. Calculate All Subnets from IP Class\n"
         menu+= "0. Exit"
         print(menu)
         
         try:
-            choice = input("\nEnter your choice (0-4): ")
-            
+            choice = input("\nEnter your choice (0-6): ")
             if choice == '0':
                 print("Goodbye!")
-                _exit(0)
+                exit()
                 
             elif choice == '1':
                 cidr = int(input("Enter CIDR (0-32): "))
@@ -219,10 +370,44 @@ def main():
                 ip = input("Enter IP address (e.g., 192.168.1.0): ")
                 binary = calc.ip_dec_to_bin(ip)
                 print(f"Binary IP: {binary}")
+
+            elif choice == '5':
+                ip = input("Enter IP address (e.g., 192.168.1.0): ")
+                cidr = int(input("Enter CIDR (0-32): "))
+                info = calc.subnet_info_calc(ip, cidr)
+                print("\n=== Subnet Information ===")
+                for key, value in info.items():
+                    print(f"{key.replace('_', ' ').title()}: {value}")
+                    
+            elif choice == '6':
+                ip = input("Enter IP address (e.g., 192.168.1.0): ")
+                subnet_mask = input("Enter subnet mask (e.g., 255.255.255.192): ")
+                result = calc.calculate_all_subnets(ip, subnet_mask)
+                
+                print("\n=== IP Class Information ===")
+                print(f"IP Class: {result['ip_class']}")
+                print(f"Default Mask: {result['default_mask']}")
+                print(f"Subnet Mask: {result['subnet_mask']}")
+                print(f"CIDR: /{result['cidr']}")
+                print(f"\n=== Current Subnet ===")
+                print(f"Network Address: {result['network_address']}")
+                print(f"First Usable IP: {result['first_usable']}")
+                print(f"Last Usable IP: {result['last_usable']}")
+                print(f"Broadcast Address: {result['broadcast_address']}")
+                print(f"Total Hosts per Subnet: {result['total_hosts']}")
+                print(f"Number of Subnets: {result['subnets_count']}")
+                
+                if len(result['subnet_info']) > 1:
+                    print(f"\n=== All Subnets (showing up to 100) ===")
+                    for subnet in result['subnet_info']:
+                        print(f"\nSubnet #{subnet['subnet_number']}:")
+                        print(f"  Network: {subnet['network_address']}")
+                        print(f"  Usable Range: {subnet['first_usable']} - {subnet['last_usable']}")
+                        print(f"  Broadcast: {subnet['broadcast_address']}")
                 
             else:
-                print("Invalid choice. Please enter a number between 0 and 4.")
-                
+                print("Invalid choice. Please enter a number between 0 and 6.")
+
         except ValueError as e:
             print(f"Error: {e}")
         except Exception as e:
