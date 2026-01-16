@@ -1,3 +1,14 @@
+#----------------------------------------------------------------------------
+#                              IPCalc-cli
+# Written by                         : Luyet Dorian, Maeder Evan
+# Created                            : 05.04.2025 (dd.mm.YYYY)
+# License                            : MIT
+# Repository                         : https://github.com/Dexerix/IPCalc
+#
+# Short program description          :
+#   Calculates IP addresses and subnet masks from binary, CIDR and decimal
+#----------------------------------------------------------------------------
+
 from os import system, name, _exit
 
 def decimal_to_bin(decimal:int) -> str:
@@ -16,7 +27,6 @@ def decimal_to_bin(decimal:int) -> str:
             binary = str(decimal % 2) + binary
             decimal //= 2
         return binary
-
 
 def bin_to_decimal(binary:str) -> int:
         """Converts a binary number to decimal format.
@@ -416,5 +426,5 @@ def main():
         input("\nPress Enter to continue...")
         system('cls' if name == 'nt' else 'clear')  # Clear screen
 
-# main
+# Main program
 main()
